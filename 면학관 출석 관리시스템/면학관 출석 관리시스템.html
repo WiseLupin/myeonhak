@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>면학관 출석부</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (xlsx) CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- Google Fonts & FontAwesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- 외부 CSS 파일 -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+  <!-- 상단 헤더 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm transition-all">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <!-- 학교마크 이미지 (학교마크_2.PNG 최적화 반영 및 마우스 호버 모션 추가) -->
+        <div class="w-11 h-11 rounded-full bg-white flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm hover:scale-105 transition-transform duration-200">
+          <img src="학교마크_2.PNG" alt="학교 마크" onerror="showDefaultLogo(this)" class="w-full h-full object-contain">
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-extrabold text-blue-900 tracking-tight flex items-center">
+            면학관 출석 관리 시스템
+            <span class="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full font-medium">v2.1</span>
+          </h1>
+          <p class="text-xs text-slate-500 hidden sm:block">보안 인증 시스템 및 도면 동기화 배치도가 적용된 교사용 통합 솔루션</p>
+        </div>
+      </div>
+      <!-- 오늘의 날짜 표시 -->
+      <div id="header-date" class="text-xs sm:text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg flex items-center">
+        <i class="fa-regular fa-calendar-check mr-2 text-blue-600"></i>
+        <span>-월 -일(-)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 레이아웃 -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    
+    <!-- 실시간 상태 대시보드 경고 (학생 데이터 미등록 시) -->
+    <div id="warning-banner" class="bg-amber-50 border-l-4 border-amber-500 p-4 mb-6 rounded-r-lg shadow-sm">
+      <div class="flex items-center">
+        <div class="flex-shrink-0">
+          <i class="fa-solid fa-triangle-exclamation text-amber-500 text-lg"></i>
+        </div>
+        <div class="ml-3 flex-1 md:flex md:justify-between items-center">
+          <p class="text-sm text-amber-800 font-medium">
+            시스템 초기화가 필요합니다. 상단의 <strong class="text-amber-900 font-bold">'교사용 메뉴'</strong>로 이동한 후, 6월 면학관 출석부 파일을 업로드해 주세요.
+          </p>
+          <p class="mt-2 md:mt-0 md:ml-6">
+            <button onclick="switchMainTab('teacher')" class="whitespace-nowrap text-sm font-semibold text-amber-900 hover:text-amber-700 underline underline-offset-2">
+              설정으로 이동 &rarr;
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 대분류 메인 탭 내비게이션 -->
+    <div class="flex border-b border-slate-200 mb-6 bg-white p-1 rounded-xl shadow-sm">
+      <button id="main-btn-student" onclick="switchMainTab('student')" class="flex-1 py-3.5 px-4 font-bold text-sm text-center rounded-lg transition-all flex items-center justify-center space-x-2 text-blue-900 bg-blue-100/70 shadow-sm">
+        <i class="fa-solid fa-user-check text-lg"></i>
+        <span>출석체크 (학생용)</span>
+      </button>
+      <button id="main-btn-teacher" onclick="switchMainTab('teacher')" class="flex-1 py-3.5 px-4 font-semibold text-sm text-center rounded-lg transition-all flex items-center justify-center space-x-2 text-slate-500 hover:bg-slate-50">
+        <i class="fa-solid fa-lock text-lg text-slate-400" id="lock-icon"></i>
+        <span>교사용 메뉴 (비밀번호 인증 필요)</span>
+      </button>
+    </div>
+
+    <!-- ======================= 메인 탭 1: 출석체크 (학생용) ======================= -->
+    <div id="main-student-content" class="block transition-opacity duration-300">
+      <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+        <div class="bg-blue-900 px-6 py-8 text-white text-center relative overflow-hidden">
+          <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-800 rounded-full opacity-20 pointer-events-none"></div>
+          <div class="absolute -left-10 -top-10 w-32 h-32 bg-blue-800 rounded-full opacity-20 pointer-events-none"></div>
+          <i class="fa-solid fa-graduation-cap text-4xl mb-3 text-blue-200 animate-bounce"></i>
+          <h2 class="text-2xl font-black tracking-wide">오늘의 면학 출석 인증</h2>
+          <p class="text-xs text-blue-200 mt-1">자신의 학번을 정확하게 입력하여 출석을 완료하세요.</p>
+        </div>
+        <div class="p-6 sm:p-8 space-y-6">
+          <!-- 학번 입력 -->
+          <div>
+            <label for="student-id-input" class="block text-sm font-bold text-slate-700 mb-2">학번 입력</label>
+            <div class="relative rounded-md shadow-sm">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fa-solid fa-id-card text-slate-400"></i>
+              </div>
+              <input type="number" id="student-id-input" placeholder="예: 10422" class="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg tracking-wider font-semibold placeholder:font-normal placeholder:tracking-normal text-slate-800 transition-all" />
+            </div>
+            <p class="text-xs text-slate-400 mt-1.5">※ 학번은 5자리 숫자로 정확히 기재해 주세요.</p>
+          </div>
+
+          <!-- 출석 교시 선택 -->
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-3">출석할 교시 선택</label>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="relative flex flex-col items-center justify-center p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all select-none">
+                <input type="radio" name="check-period" value="8교시" checked class="sr-only peer">
+                <div class="w-4 h-4 border border-slate-300 rounded-full flex items-center justify-center peer-checked:border-blue-600 peer-checked:bg-blue-600 mb-2 transition-all">
+                  <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                </div>
+                <span class="text-sm font-bold text-slate-700">8교시</span>
+                <span class="text-[10px] text-slate-400 mt-0.5">방과후 시간</span>
+              </label>
+              <label class="relative flex flex-col items-center justify-center p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all select-none">
+                <input type="radio" name="check-period" value="1교시" class="sr-only peer">
+                <div class="w-4 h-4 border border-slate-300 rounded-full flex items-center justify-center peer-checked:border-blue-600 peer-checked:bg-blue-600 mb-2 transition-all">
+                  <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                </div>
+                <span class="text-sm font-bold text-slate-700">1교시</span>
+                <span class="text-[10px] text-slate-400 mt-0.5">야자 1부</span>
+              </label>
+              <label class="relative flex flex-col items-center justify-center p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all select-none">
+                <input type="radio" name="check-period" value="2교시" class="sr-only peer">
+                <div class="w-4 h-4 border border-slate-300 rounded-full flex items-center justify-center peer-checked:border-blue-600 peer-checked:bg-blue-600 mb-2 transition-all">
+                  <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                </div>
+                <span class="text-sm font-bold text-slate-700">2교시</span>
+                <span class="text-[10px] text-slate-400 mt-0.5">야자 2부</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 출석 완료 버튼 -->
+          <button id="btn-submit-attendance" onclick="processStudentCheckIn()" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-fingerprint"></i>
+            <span>출석 완료하기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================= 메인 탭 2: 교사용 대시보드 (잠금 보안 화면) ======================= -->
+    <div id="main-teacher-auth" class="hidden transition-opacity duration-300">
+      <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-8 text-center space-y-6">
+        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+          <i class="fa-solid fa-shield-halved text-3xl"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-slate-800">교사 권한 인증</h3>
+          <p class="text-slate-500 text-xs mt-1">이 영역은 관리 목적을 위한 공간입니다. 관리 비밀번호를 입력하십시오.</p>
+        </div>
+        <div>
+          <input type="password" id="teacher-password-input" placeholder="비밀번호 입력" class="block w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 text-center tracking-widest text-lg font-bold placeholder:text-sm placeholder:tracking-normal" onkeydown="if(event.key === 'Enter') checkTeacherPassword()" />
+        </div>
+        <button onclick="checkTeacherPassword()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow transition-all">
+          인증 완료 및 잠금 해제
+        </button>
+      </div>
+    </div>
+
+    <!-- ======================= 메인 탭 2-Unlocked: 교사용 실제 하부 메뉴 콘텐트 ======================= -->
+    <div id="main-teacher-content" class="hidden space-y-6 transition-opacity duration-300">
+      
+      <!-- 교사용 내부 헤더 바 -->
+      <div class="bg-slate-900 text-white p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-circle-check text-emerald-400"></i>
+          <span class="text-sm font-bold">인증됨: 교사 모드가 승인되었습니다.</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="lockTeacherMenu()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 font-semibold flex items-center space-x-1.5 transition-all">
+            <i class="fa-solid fa-lock"></i>
+            <span>교사용 잠그기 (로그아웃)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 교사용 내부 서브탭 변경기 (출석결과 / 학생정보) -->
+      <div class="flex space-x-2 border-b border-slate-200 pb-2">
+        <button id="sub-btn-results" onclick="switchTeacherSubMenu('results')" class="py-2.5 px-6 font-bold text-sm rounded-lg text-blue-900 bg-blue-100/80 transition-all flex items-center space-x-2">
+          <i class="fa-solid fa-clipboard-user text-base"></i>
+          <span>출석결과 조회</span>
+        </button>
+        <button id="sub-btn-info" onclick="switchTeacherSubMenu('info')" class="py-2.5 px-6 font-semibold text-sm rounded-lg text-slate-600 hover:bg-slate-100 transition-all flex items-center space-x-2">
+          <i class="fa-solid fa-database text-base"></i>
+          <span>학생정보 DB 등록</span>
+        </button>
+      </div>
+
+      <!-- ======================= 하부메뉴 A: 출석결과 조회 ======================= -->
+      <div id="sub-results-panel" class="block space-y-6">
+        
+        <!-- 시각화 방식 2차 전환 버튼 (명렬표 / 배치도) -->
+        <div class="flex space-x-2 bg-slate-200/60 p-1 rounded-lg w-fit">
+          <button id="view-btn-table" onclick="switchViewType('table')" class="py-1.5 px-4 font-bold text-xs rounded bg-white text-slate-800 shadow transition-all flex items-center space-x-1">
+            <i class="fa-solid fa-table-list"></i>
+            <span>명렬표 보기</span>
+          </button>
+          <button id="view-btn-map" onclick="switchViewType('map')" class="py-1.5 px-4 font-medium text-xs rounded text-slate-600 hover:bg-white/50 transition-all flex items-center space-x-1">
+            <i class="fa-solid fa-border-all"></i>
+            <span>실제 도면 배치도</span>
+          </button>
+        </div>
+
+        <!-- 필터 및 검색, 엑셀 다운로드 바 -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div class="flex flex-wrap gap-2">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 mb-1">날짜 선택</label>
+              <select id="filter-date" onchange="updateAttendanceTable()" class="border border-slate-300 bg-slate-50 text-slate-700 rounded-lg px-3 py-1.5 font-semibold text-xs focus:ring-2 focus:ring-blue-500">
+                <!-- 동적으로 채워짐 -->
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 mb-1">반 선택</label>
+              <select id="filter-class" onchange="updateAttendanceTable()" class="border border-slate-300 bg-slate-50 text-slate-700 rounded-lg px-3 py-1.5 font-semibold text-xs focus:ring-2 focus:ring-blue-500">
+                <option value="all">전체 학급</option>
+                <!-- 동적으로 생성 -->
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-2">
+            <div class="relative flex-grow md:w-64">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs"></i>
+              </span>
+              <input type="text" id="search-student" oninput="updateAttendanceTable()" placeholder="이름 또는 학번 검색..." class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded-lg text-xs flex items-center space-x-1.5 shadow-sm transition-all whitespace-nowrap">
+              <i class="fa-solid fa-file-excel"></i>
+              <span>전체 날짜 출결 엑셀 다운로드</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 명렬표 테이블 형식 뷰 -->
+        <div id="view-panel-table" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden block">
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+              <thead class="bg-slate-50">
+                <tr>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center cursor-pointer hover:bg-slate-100 transition-all select-none" onclick="handleSort('seat')">
+                    <div class="flex items-center justify-center space-x-1">
+                      <span>좌석</span>
+                      <span id="sort-icon-seat" class="text-slate-400"><i class="fa-solid fa-sort text-[10px]"></i></span>
+                    </div>
+                  </th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center cursor-pointer hover:bg-slate-100 transition-all select-none" onclick="handleSort('id')">
+                    <div class="flex items-center justify-center space-x-1">
+                      <span>학번</span>
+                      <span id="sort-icon-id" class="text-slate-400"><i class="fa-solid fa-sort text-[10px]"></i></span>
+                    </div>
+                  </th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center">이름</th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center">반/번호</th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center bg-blue-50 text-blue-900">8교시</th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center bg-indigo-50 text-indigo-900">1교시</th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center bg-purple-50 text-purple-900">2교시</th>
+                  <th scope="col" class="px-4 py-3 font-bold text-slate-600 text-xs tracking-wider text-center">교사 수동 출석관리</th>
+                </tr>
+              </thead>
+              <tbody id="student-table-body" class="bg-white divide-y divide-slate-100">
+                <tr>
+                  <td colspan="8" class="text-center py-12 text-slate-400">
+                    <i class="fa-solid fa-folder-open text-3xl mb-3 block text-slate-300"></i>
+                    '학생정보 DB 등록' 탭에서 면학관 출석부 명단 엑셀을 먼저 업로드해 주세요.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 배치도 시각화 형식 뷰 (면학관 배치도.png 형태 반영) -->
+        <div id="view-panel-map" class="hidden space-y-4">
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div class="flex items-center space-x-4">
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-bold text-slate-500">조회 날짜:</span>
+                <span id="map-selected-date" class="bg-blue-50 text-blue-700 text-xs font-extrabold px-3 py-1 rounded-md">월(8일)</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span class="text-xs font-bold text-slate-500">배치도 확인교시:</span>
+                <div class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                  <button onclick="setMapPeriod('8교시')" id="btn-map-8" class="px-2.5 py-1 text-[11px] font-bold rounded-md bg-white shadow-sm text-slate-800">8교시</button>
+                  <button onclick="setMapPeriod('1교시')" id="btn-map-1" class="px-2.5 py-1 text-[11px] font-semibold rounded-md text-slate-500">1교시</button>
+                  <button onclick="setMapPeriod('2교시')" id="btn-map-2" class="px-2.5 py-1 text-[11px] font-semibold rounded-md text-slate-500">2교시</button>
+                </div>
+              </div>
+            </div>
+            <!-- 범례 안내 -->
+            <div class="flex flex-wrap items-center gap-3 text-xs font-medium">
+              <div class="flex items-center space-x-1">
+                <span class="w-3.5 h-3.5 rounded bg-blue-600 border border-blue-400 block"></span>
+                <span class="text-slate-600">출석 완료 (지정교시)</span>
+              </div>
+              <div class="flex items-center space-x-1">
+                <span class="w-3.5 h-3.5 rounded bg-amber-500/10 border border-amber-500/50 block"></span>
+                <span class="text-slate-600">방과후/두드림 등 지정 면제</span>
+              </div>
+              <div class="flex items-center space-x-1">
+                <span class="w-3.5 h-3.5 rounded bg-slate-700/40 border border-slate-600 block"></span>
+                <span class="text-slate-600">공석 / 미출석</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 실제 도면을 그대로 복원한 시각화 판넬 -->
+          <div class="bg-slate-900 p-6 rounded-2xl shadow-xl border border-slate-800 relative overflow-x-auto custom-scrollbar">
+            <div class="bg-grid-pattern absolute inset-0 opacity-10 pointer-events-none"></div>
+            
+            <div class="min-w-[800px] max-w-[1200px] mx-auto space-y-6 relative z-10">
+              <!-- 교탁 전면 표시 -->
+              <div class="w-full flex justify-center">
+                <div class="bg-slate-800 text-slate-400 border border-slate-700 rounded-full px-12 py-1.5 text-xs font-black tracking-[0.5em] shadow-inner flex items-center justify-center space-x-2">
+                  <i class="fa-solid fa-chalkboard-user"></i>
+                  <span>칠판 / 교탁 방향 (FRONT)</span>
+                </div>
+              </div>
+
+              <!-- 배치도 3대 거대 열구조 (도면 구조 그대로 차용) -->
+              <div class="grid grid-cols-12 gap-4">
+                
+                <!-- 1. 좌측 블록 (2열) -->
+                <div class="col-span-5 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                  <div class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">좌측 좌석 구역 (창가)</div>
+                  
+                  <div class="grid grid-cols-2 gap-x-2 gap-y-1.5" id="map-left-grid-top">
+                    <!-- 78-71 / 49-56 배정 -->
+                  </div>
+                  
+                  <div class="h-6 bg-slate-800/20 border-t border-b border-dashed border-slate-700 my-4 flex items-center justify-center">
+                    <span class="text-[9px] text-slate-600 font-extrabold tracking-widest">통로 및 공간구획선</span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-x-2 gap-y-1.5 mb-3" id="map-left-grid-bottom">
+                    <!-- 70-64 / 57-63 배정 -->
+                  </div>
+
+                  <!-- 추가 좌석 자유석 12, 13 -->
+                  <div class="border-t border-slate-700 pt-3 mt-1">
+                    <div class="text-[9px] text-slate-500 font-bold mb-1.5 text-center">추가 좌석</div>
+                    <div class="grid grid-cols-2 gap-x-2" id="map-left-extra"></div>
+                  </div>
+                </div>
+
+                <!-- 2. 중앙 블록 (2열) -->
+                <div class="col-span-5 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                  <div class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">중앙 좌석 구역</div>
+                  
+                  <div class="grid grid-cols-2 gap-x-2 gap-y-1.5" id="map-mid-grid-top">
+                    <!-- 48-41 / 19-26 배정 -->
+                  </div>
+                  
+                  <div class="h-6 bg-slate-800/20 border-t border-b border-dashed border-slate-700 my-4 flex items-center justify-center">
+                    <span class="text-[9px] text-slate-600 font-extrabold tracking-widest">통로 및 공간구획선</span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-x-2 gap-y-1.5 mb-3" id="map-mid-grid-bottom">
+                    <!-- 40-34 / 27-33 배정 -->
+                  </div>
+
+                  <!-- 추가 좌석 자유석 14, 15 -->
+                  <div class="border-t border-slate-700 pt-3 mt-1">
+                    <div class="text-[9px] text-slate-500 font-bold mb-1.5 text-center">추가 좌석</div>
+                    <div class="grid grid-cols-2 gap-x-2" id="map-mid-extra"></div>
+                  </div>
+                </div>
+
+                <!-- 3. 우측 복도 및 단독 창가 열 (1열 구성 + 기둥 + 하단 출입문) -->
+                <div class="col-span-2 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col justify-between">
+                  <div class="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">우측 단독석 구역</div>
+                  
+                  <div class="space-y-1.5" id="map-right-column">
+                    <!-- 18-1, 기둥, 하단 출입문 -->
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- 배치도 하단 설명 -->
+              <div class="pt-4 border-t border-slate-800 text-center text-[11px] text-slate-500 flex justify-between items-center px-2">
+                <span>※ 도면 상단의 번호 배치는 실제 실물 이미지 양식을 정확하게 준수합니다.</span>
+                <span class="text-blue-400 font-bold"><i class="fa-solid fa-circle-info mr-1"></i> 책상을 클릭하면 즉시 수동 출석/결석이 변경됩니다.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ======================= 하부메뉴 B: 학생정보 DB 등록 ======================= -->
+      <div id="sub-info-panel" class="hidden space-y-6">
+        
+        <!-- 데이터베이스 업로드 카드 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden">
+          <div class="p-5 bg-gradient-to-r from-blue-950 to-indigo-900 text-white flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <i class="fa-solid fa-file-excel text-2xl text-blue-300"></i>
+              <div>
+                <h3 class="text-base font-extrabold">면학관 출석부 명단 로드</h3>
+                <p class="text-[11px] text-blue-200 mt-0.5">배정된 자율학습 출석부 데이터를 파싱하여 로컬에 활성화합니다.</p>
+              </div>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button onclick="clearSystemData()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-all flex items-center space-x-1">
+                <i class="fa-solid fa-trash-can"></i>
+                <span>데이터 초기화</span>
+              </button>
+              <i class="fa-solid fa-circle-check text-emerald-400 text-2xl hidden" id="upload-status-icon"></i>
+            </div>
+          </div>
+
+          <div class="p-6 space-y-6">
+            <!-- 드래그앤드롭 영역 -->
+            <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-8 text-center bg-slate-50 hover:bg-blue-50/50 transition-all cursor-pointer">
+              <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)" />
+              <div onclick="document.getElementById('excel-file-input').click()" class="space-y-4">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600 shadow-sm">
+                  <i class="fa-solid fa-cloud-arrow-up text-xl"></i>
+                </div>
+                <div>
+                  <p class="text-slate-700 font-bold text-sm">면학관 출석부 엑셀(.xlsx) 또는 CSV 파일 드래그 업로드</p>
+                  <p class="text-xs text-slate-400 mt-1">이곳을 드래그하거나 클릭하여 파일을 전송하세요.</p>
+                </div>
+                <div class="inline-block bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm text-xs font-semibold text-slate-600">
+                  <i class="fa-regular fa-file mr-1"></i> 면학관 출석부.xlsx 가져오기
+                </div>
+              </div>
+            </div>
+
+            <!-- 파싱 완료 후 데이터 적용 전 대기 스크린 -->
+            <div id="preview-container" class="hidden space-y-4 border-t border-slate-200 pt-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800 flex items-center">
+                    <span class="w-2.5 h-2.5 bg-blue-600 rounded-full mr-2"></span>
+                    가져온 데이터 임시 확인
+                  </h4>
+                  <p class="text-xs text-slate-500 mt-0.5">학생 학번 및 기존의 일자별 지정 면제 기록을 확인한 뒤 아래 '데이터 적용하기'를 눌러주십시오.</p>
+                </div>
+                <div class="text-right">
+                  <span id="preview-count" class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full">학생 -명</span>
+                </div>
+              </div>
+
+              <!-- 가상 미니 테이블 (미리보기 제한 노출) -->
+              <div class="border border-slate-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto custom-scrollbar bg-slate-50">
+                <table class="min-w-full divide-y divide-slate-200 text-left text-xs">
+                  <thead class="bg-slate-100 sticky top-0">
+                    <tr>
+                      <th class="px-3 py-2 font-bold text-slate-600 text-center">좌석</th>
+                      <th class="px-3 py-2 font-bold text-slate-600">학번</th>
+                      <th class="px-3 py-2 font-bold text-slate-600">이름</th>
+                      <th class="px-3 py-2 font-bold text-slate-600">반-번호</th>
+                      <th class="px-3 py-2 font-bold text-slate-600">기존 엑셀 원본 비고/면제 데이터</th>
+                    </tr>
+                  </thead>
+                  <tbody id="preview-table-body" class="divide-y divide-slate-200 bg-white">
+                    <!-- 파싱된 데이터 목록이 이곳에 노출됨 -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- 적용 및 데이터베이스 활성화 동기화 버튼 -->
+              <div class="flex justify-end pt-3">
+                <button onclick="applyUploadedData()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center space-x-2">
+                  <i class="fa-solid fa-circle-check"></i>
+                  <span>데이터 적용하기</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- 하단 풋터 -->
+  <footer class="bg-white border-t border-slate-200 py-6 mt-12">
+    <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400 space-y-1">
+      <p class="font-semibold text-slate-500">© 2026 면학관 출석 관리 시스템. All Rights Reserved.</p>
+      <p>본 시스템은 민감정보 보호를 위해 업로드된 학생 엑셀 정보를 수집하거나 타사 클라우드로 전송하지 않고 브라우저 가상 세션에만 보관합니다.</p>
+    </div>
+  </footer>
+
+  <!-- 알림 메시지 (Toast) 레이어 -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+  <!-- 외부 JS 파일 -->
+  <script src="app.js"></script>
+</body>
+</html>
